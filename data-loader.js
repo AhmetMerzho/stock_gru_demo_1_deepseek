@@ -1,4 +1,8 @@
-import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js';
+const tf = globalThis.tf;
+
+if (!tf || typeof tf.tensor !== 'function') {
+  throw new Error('TensorFlow.js failed to initialise. Ensure tf.min.js loads before data-loader.js.');
+}
 
 const REQUIRED_COLUMNS = ['Date', 'Symbol', 'Open', 'Close'];
 
