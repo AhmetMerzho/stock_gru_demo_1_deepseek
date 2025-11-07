@@ -37,8 +37,8 @@ export class GRUModel {
 
     model.compile({
       optimizer: tf.train.adam(0.001),
-      loss: tf.losses.binaryCrossentropy,
-      metrics: [tf.metrics.binaryAccuracy],
+      loss: 'binaryCrossentropy',
+      metrics: ['binaryAccuracy'],
     });
 
     this.model = model;
