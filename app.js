@@ -31,6 +31,7 @@ class StockPredictionApp {
 
     this.attachEventListeners();
     this.initCharts();
+    this.setTrainButtonEnabled(false);
   }
 
   attachEventListeners() {
@@ -135,7 +136,7 @@ class StockPredictionApp {
 
     this.setStatus('Dataset ready.', `${this.trainingData.symbols.length} symbols × ${this.trainingData.sequenceLength}-day windows.`);
     this.populateDatasetSummary(isSample);
-    this.dom.trainBtn.disabled = false;
+    this.setTrainButtonEnabled(true);
   }
 
   populateDatasetSummary(isSample) {
@@ -173,7 +174,7 @@ class StockPredictionApp {
     const batchSize = Number.parseInt(this.dom.batchInput.value, 10) || 32;
 
     try {
-      this.dom.trainBtn.disabled = true;
+      this.setTrainButtonEnabled(false);
       this.setTrainingStatus(true, 'Initialising model…');
 
       if (this.model) {
@@ -219,7 +220,7 @@ class StockPredictionApp {
       console.error(error);
       this.handleError(error);
     } finally {
-      this.dom.trainBtn.disabled = false;
+      this.setTrainButtonEnabled(true);
       this.setTrainingStatus(false);
     }
   }
@@ -347,7 +348,7 @@ class StockPredictionApp {
 
   handleError(error) {
     this.setStatus('Something went wrong.', error.message || String(error));
-    this.dom.trainBtn.disabled = true;
+    this.setTrainButtonEnabled(false);
   }
 
   resetApplicationState() {
@@ -359,7 +360,7 @@ class StockPredictionApp {
     }
 
     this.trainingData = null;
-    this.dom.trainBtn.disabled = true;
+    this.setTrainButtonEnabled(false);
     this.dom.statusMessage.textContent = 'Awaiting CSV upload.';
     this.dom.statusDetail.textContent = '';
     this.dom.datasetSummary.hidden = true;
@@ -386,6 +387,22 @@ class StockPredictionApp {
         tensor.dispose();
       }
     });
+  }
+
+  setTrainButtonEnabled(enabled) {
+    if (!this.dom.trainBtn) {
+      return;
+    }
+
+    if (enabled) {
+      this.dom.trainBtn.disabled = false;
+      this.dom.trainBtn.removeAttribute('disabled');
+      this.dom.trainBtn.setAttribute('aria-disabled', 'false');
+    } else {
+      this.dom.trainBtn.disabled = true;
+      this.dom.trainBtn.setAttribute('disabled', '');
+      this.dom.trainBtn.setAttribute('aria-disabled', 'true');
+    }
   }
 }
 
