@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Price Prediction</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@latest"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .upload-section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .chart-container { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        canvas { max-width: 100%; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Stock Price Prediction</h1>
+        
+        <div class="upload-section">
+            <h3>1. Upload CSV Data</h3>
+            <input type="file" id="csvFile" accept=".csv">
+            <button id="trainBtn" disabled>Train Model</button>
+            <div id="status">Please upload a CSV file to begin</div>
+        </div>
+
+        <div class="chart-container">
+            <h3>2. Prediction Accuracy by Stock</h3>
+            <canvas id="accuracyChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3>3. Prediction Timeline</h3>
+            <canvas id="timelineChart"></canvas>
+        </div>
+
+        <div>
+            <h3>4. Accuracy Results</h3>
+            <table id="accuracyTable">
+                <thead>
+                    <tr>
+                        <th>Stock</th>
+                        <th>Accuracy</th>
+                        <th>Rank</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Results will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { StockPredictionApp } from './app.js';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            window.stockApp = new StockPredictionApp();
+        });
+    </script>
+</body>
+</html>
