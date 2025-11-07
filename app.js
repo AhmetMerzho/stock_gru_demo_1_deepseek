@@ -134,7 +134,12 @@ class StockPredictionApp {
     this.disposeTrainingData();
     this.trainingData = await this.dataLoader.prepareDataset();
 
-    this.setStatus('Dataset ready.', `${this.trainingData.symbols.length} symbols × ${this.trainingData.sequenceLength}-day windows.`);
+    const featureCount = this.trainingData.featuresPerSymbol?.length || 0;
+    const symbols = this.trainingData.symbols.length;
+    this.setStatus(
+      'Dataset ready.',
+      `${symbols} symbols × ${this.trainingData.sequenceLength}-day windows · ${featureCount} features per symbol.`,
+    );
     this.populateDatasetSummary(isSample);
     this.setTrainButtonEnabled(true);
   }
@@ -144,6 +149,10 @@ class StockPredictionApp {
     datasetSummary.hidden = false;
     datasetSummary.innerHTML = '';
 
+    const featureCount = this.trainingData.featuresPerSymbol?.length || 0;
+
+    const featureNames = (this.trainingData.featuresPerSymbol || []).join(', ') || '—';
+
     const entries = [
       { title: 'Unique symbols', value: this.trainingData.symbols.length },
       { title: 'Timeline days', value: this.dataLoader.dates.length },
@@ -151,6 +160,8 @@ class StockPredictionApp {
       { title: 'Test samples', value: this.trainingData.sampleDates.length - this.trainingData.splitIndex },
       { title: 'Sequence length', value: `${this.trainingData.sequenceLength} days` },
       { title: 'Prediction horizon', value: `${this.trainingData.predictionDays} days` },
+      { title: 'Features per symbol', value: featureCount },
+      { title: 'Feature set', value: featureNames },
     ];
 
     if (isSample) {
@@ -170,7 +181,7 @@ class StockPredictionApp {
       return;
     }
 
-    const epochs = Number.parseInt(this.dom.epochInput.value, 10) || 40;
+    const epochs = Number.parseInt(this.dom.epochInput.value, 10) || 60;
     const batchSize = Number.parseInt(this.dom.batchInput.value, 10) || 32;
 
     try {
@@ -181,7 +192,11 @@ class StockPredictionApp {
         this.model.dispose();
       }
 
-      const inputShape = [this.trainingData.sequenceLength, this.trainingData.symbols.length * 2];
+      const featuresPerSymbol = this.trainingData.featuresPerSymbol.length;
+      const inputShape = [
+        this.trainingData.sequenceLength,
+        this.trainingData.symbols.length * featuresPerSymbol,
+      ];
       const outputSize = this.trainingData.symbols.length * this.trainingData.predictionDays;
 
       this.model = new GRUModel({ inputShape, outputSize });
@@ -199,18 +214,20 @@ class StockPredictionApp {
           lastLoss = logs.loss;
           const valAcc = logs.val_binaryAccuracy ?? logs.val_acc ?? logs.val_binaryaccuracy;
           const trainAcc = logs.binaryAccuracy ?? logs.acc ?? logs.binaryaccuracy;
+          const lr = this.model?.getLearningRate?.();
           const accText = [
             trainAcc !== undefined ? `train acc ${(trainAcc * 100).toFixed(1)}%` : null,
             valAcc !== undefined ? `val acc ${(valAcc * 100).toFixed(1)}%` : null,
           ]
             .filter(Boolean)
             .join(' · ');
+          const detailParts = [
+            `loss ${logs.loss.toFixed(4)}`,
+            accText,
+            Number.isFinite(lr) ? `lr ${lr.toExponential(2)}` : null,
+          ].filter(Boolean);
 
-          this.setTrainingStatus(
-            true,
-            `Epoch ${epoch + 1}/${epochs}`,
-            `loss ${logs.loss.toFixed(4)}${accText ? ` · ${accText}` : ''}`,
-          );
+          this.setTrainingStatus(true, `Epoch ${epoch + 1}/${epochs}`, detailParts.join(' · '));
         },
       });
 
