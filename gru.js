@@ -51,7 +51,7 @@ function createReduceLROnPlateauCallback(optimizer, {
   let best = Number.POSITIVE_INFINITY;
   let wait = 0;
 
-  return tf.callbacks.custom({
+  return new tf.CustomCallback({
     onEpochEnd: async (epoch, logs) => {
       const current = logs?.[monitor];
       if (current == null || !Number.isFinite(current)) {
@@ -211,7 +211,7 @@ export class GRUModel {
     const callbacks = [];
 
     callbacks.push(
-      tf.callbacks.custom({
+      new tf.CustomCallback({
         onBatchEnd: async () => {
           await tf.nextFrame();
         },
