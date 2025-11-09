@@ -93,12 +93,12 @@ export class GRUModel {
   }
 
   build({
-    dropoutRate = 0.3,
-    gruUnits = [160, 96],
-    denseUnits = [128, 64],
+    dropoutRate = 0.25,
+    gruUnits = [96, 64],
+    denseUnits = [96, 48],
     bidirectional = true,
-    learningRate = 0.0008,
-    recurrentDropout = 0.15,
+    learningRate = 0.001,
+    recurrentDropout = 0.1,
   } = {}) {
     if (!Array.isArray(gruUnits) || gruUnits.length === 0) {
       throw new Error('gruUnits must be a non-empty array');
@@ -212,6 +212,9 @@ export class GRUModel {
 
     callbacks.push(
       tf.callbacks.custom({
+        onBatchEnd: async () => {
+          await tf.nextFrame();
+        },
         onEpochEnd: async (epoch, logs) => {
           if (typeof onEpochEnd === 'function') {
             onEpochEnd(epoch, logs);

@@ -1,6 +1,12 @@
 import { DataLoader } from './data-loader.js';
 import { GRUModel } from './gru.js';
 
+const tf = globalThis.tf;
+
+if (!tf || typeof tf.nextFrame !== 'function') {
+  throw new Error('TensorFlow.js failed to initialise. Ensure tf.min.js loads before app.js.');
+}
+
 class StockPredictionApp {
   constructor() {
     this.dataLoader = new DataLoader();
@@ -181,7 +187,7 @@ class StockPredictionApp {
       return;
     }
 
-    const epochs = Number.parseInt(this.dom.epochInput.value, 10) || 60;
+    const epochs = Number.parseInt(this.dom.epochInput.value, 10) || 35;
     const batchSize = Number.parseInt(this.dom.batchInput.value, 10) || 32;
 
     try {
@@ -201,6 +207,8 @@ class StockPredictionApp {
 
       this.model = new GRUModel({ inputShape, outputSize });
       this.model.build();
+
+      await tf.nextFrame();
 
       let lastLoss = Number.NaN;
       await this.model.train({
