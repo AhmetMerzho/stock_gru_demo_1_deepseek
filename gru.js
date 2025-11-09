@@ -94,11 +94,15 @@ export class GRUModel {
 
   build({
     dropoutRate = 0.25,
-    gruUnits = [96, 64],
-    denseUnits = [96, 48],
+    gruUnits = [128, 96, 64],
+    denseUnits = [128, 64],
     bidirectional = true,
     learningRate = 0.001,
     recurrentDropout = 0.1,
+    convFilters = [96],
+    convKernelSize = 3,
+    convActivation = 'relu',
+    convDropout = 0.1,
   } = {}) {
     if (!Array.isArray(gruUnits) || gruUnits.length === 0) {
       throw new Error('gruUnits must be a non-empty array');
@@ -116,6 +120,41 @@ export class GRUModel {
 
     const model = tf.sequential();
 
+    const hasConvStack = Array.isArray(convFilters) && convFilters.length > 0;
+    if (hasConvStack) {
+      convFilters.forEach((filters, idx) => {
+        if (!Number.isFinite(filters) || filters <= 0) {
+          throw new Error('convFilters must contain positive numbers');
+        }
+
+        const kernel = Array.isArray(convKernelSize)
+          ? convKernelSize[idx % convKernelSize.length]
+          : convKernelSize;
+
+        const convConfig = {
+          filters,
+          kernelSize: Number.isFinite(kernel) && kernel > 0 ? kernel : 3,
+          padding: 'causal',
+          activation: convActivation,
+          kernelInitializer: 'heNormal',
+        };
+
+        if (idx === 0) {
+          convConfig.inputShape = this.inputShape;
+        }
+
+        model.add(tf.layers.conv1d(convConfig));
+
+        if (HAS_LAYER_NORM) {
+          model.add(tf.layers.layerNormalization());
+        }
+
+        if (convDropout > 0) {
+          model.add(tf.layers.dropout({ rate: Math.min(0.5, convDropout) }));
+        }
+      });
+    }
+
     gruUnits.forEach((units, idx) => {
       const gruConfig = {
         units,
@@ -124,7 +163,7 @@ export class GRUModel {
         recurrentDropout: Math.min(0.4, recurrentDropout),
       };
 
-      if (!bidirectional && idx === 0) {
+      if (!bidirectional && idx === 0 && !hasConvStack) {
         gruConfig.inputShape = this.inputShape;
       }
 
@@ -136,7 +175,7 @@ export class GRUModel {
           mergeMode: 'concat',
         };
 
-        if (idx === 0) {
+        if (idx === 0 && !hasConvStack) {
           wrapperConfig.inputShape = this.inputShape;
         }
 

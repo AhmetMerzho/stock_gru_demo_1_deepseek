@@ -279,7 +279,12 @@ class StockPredictionApp {
     this.renderTimelines(metrics.perStockTimeline, testSampleDates);
     this.renderConfusion(metrics.perStockConfusion);
 
-    this.setStatus('Evaluation complete.', `Overall accuracy ${(metrics.overallAccuracy * 100).toFixed(2)}% on test split.`);
+    const sortedStocks = Object.entries(metrics.perStockAccuracy).sort((a, b) => b[1] - a[1]);
+    const [topSymbol, topAccuracy] = sortedStocks[0] || ['—', 0];
+    const overallText = `Overall accuracy ${(metrics.overallAccuracy * 100).toFixed(2)}% on test split.`;
+    const topText = `Top-1 ${topSymbol} ${(topAccuracy * 100).toFixed(2)}%`;
+
+    this.setStatus('Evaluation complete.', `${overallText} ${topText}`);
   }
 
   renderAccuracyChart(perStockAccuracy) {

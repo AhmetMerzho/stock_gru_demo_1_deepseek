@@ -6,7 +6,118 @@ if (!tf || typeof tf.tensor !== 'function') {
 
 const REQUIRED_COLUMNS = ['Date', 'Symbol', 'Open', 'Close'];
 
-const FEATURE_KEYS = ['Open', 'Close', 'Return', 'Momentum3', 'Volatility5'];
+const FEATURE_KEYS = [
+  'Open',
+  'Close',
+  'CloseToOpen',
+  'Return',
+  'LogReturn',
+  'Momentum3',
+  'Momentum7',
+  'Volatility5',
+  'Volatility10',
+  'SMA5',
+  'EMA10',
+  'RSI14',
+  'MACD',
+  'MACDSignal',
+];
+
+function safeDivide(numerator, denominator, fallback = 0) {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+    return fallback;
+  }
+  return numerator / denominator;
+}
+
+function computeSMA(series, period) {
+  const result = new Array(series.length).fill(0);
+  let windowSum = 0;
+
+  for (let i = 0; i < series.length; i += 1) {
+    const value = Number.isFinite(series[i]) ? series[i] : 0;
+    windowSum += value;
+
+    if (i >= period) {
+      const outgoing = Number.isFinite(series[i - period]) ? series[i - period] : 0;
+      windowSum -= outgoing;
+    }
+
+    if (i >= period - 1) {
+      result[i] = windowSum / period;
+    }
+  }
+
+  return result;
+}
+
+function computeEMA(series, period) {
+  const result = new Array(series.length).fill(0);
+  if (period <= 1) {
+    return series.map((value) => (Number.isFinite(value) ? value : 0));
+  }
+
+  const smoothing = 2 / (period + 1);
+  let ema = null;
+
+  for (let i = 0; i < series.length; i += 1) {
+    const value = Number.isFinite(series[i]) ? series[i] : (ema ?? 0);
+
+    if (ema === null) {
+      const windowStart = Math.max(0, i - period + 1);
+      const window = series.slice(windowStart, i + 1).filter((v) => Number.isFinite(v));
+      ema = window.length > 0 ? window.reduce((acc, v) => acc + v, 0) / window.length : value;
+    } else {
+      ema = (value - ema) * smoothing + ema;
+    }
+
+    result[i] = Number.isFinite(ema) ? ema : 0;
+  }
+
+  return result;
+}
+
+function computeRSI(series, period = 14) {
+  const result = new Array(series.length).fill(50);
+  if (series.length < 2) {
+    return result;
+  }
+
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  for (let i = 1; i < series.length; i += 1) {
+    const current = Number.isFinite(series[i]) ? series[i] : series[i - 1];
+    const previous = Number.isFinite(series[i - 1]) ? series[i - 1] : current;
+    const change = current - previous;
+    const gain = Math.max(change, 0);
+    const loss = Math.max(-change, 0);
+
+    if (i <= period) {
+      avgGain += gain;
+      avgLoss += loss;
+
+      if (i === period) {
+        avgGain /= period;
+        avgLoss /= period;
+      }
+    } else {
+      avgGain = ((avgGain * (period - 1)) + gain) / period;
+      avgLoss = ((avgLoss * (period - 1)) + loss) / period;
+    }
+
+    if (i >= period) {
+      if (avgLoss === 0) {
+        result[i] = 100;
+      } else {
+        const rs = avgGain / avgLoss;
+        result[i] = 100 - 100 / (1 + rs);
+      }
+    }
+  }
+
+  return result.map((value) => (Number.isFinite(value) ? value : 50));
+}
 
 function parseCSVLine(line) {
   const result = [];
@@ -214,6 +325,11 @@ export class DataLoader {
       });
 
       const closes = this.featureCube[symbol].Close;
+      const closeToOpen = closes.map((value, index) => {
+        const openValue = this.featureCube[symbol].Open[index];
+        return safeDivide(value - openValue, openValue, 0);
+      });
+
       const returns = closes.map((value, index) => {
         if (index === 0) {
           return 0;
@@ -225,11 +341,33 @@ export class DataLoader {
         return (value - previous) / previous;
       });
 
+      const logReturns = closes.map((value, index) => {
+        if (index === 0) {
+          return 0;
+        }
+        const previous = closes[index - 1];
+        if (!Number.isFinite(value) || !Number.isFinite(previous) || previous <= 0) {
+          return 0;
+        }
+        return Math.log(value / previous);
+      });
+
       const momentum3 = closes.map((value, index) => {
         if (index < 3) {
           return 0;
         }
         const baseline = closes[index - 3];
+        if (!Number.isFinite(value) || !Number.isFinite(baseline) || baseline === 0) {
+          return 0;
+        }
+        return (value - baseline) / baseline;
+      });
+
+      const momentum7 = closes.map((value, index) => {
+        if (index < 7) {
+          return 0;
+        }
+        const baseline = closes[index - 7];
         if (!Number.isFinite(value) || !Number.isFinite(baseline) || baseline === 0) {
           return 0;
         }
@@ -256,9 +394,47 @@ export class DataLoader {
         return std / mean;
       });
 
+      const volatility10 = closes.map((_, index) => {
+        if (index < 9) {
+          return 0;
+        }
+        const window = closes.slice(index - 9, index + 1);
+        if (window.some((v) => !Number.isFinite(v))) {
+          return 0;
+        }
+        const mean = window.reduce((acc, v) => acc + v, 0) / window.length;
+        if (!Number.isFinite(mean) || mean === 0) {
+          return 0;
+        }
+        const variance = window.reduce((acc, v) => acc + (v - mean) ** 2, 0) / window.length;
+        const std = Math.sqrt(variance);
+        if (!Number.isFinite(std)) {
+          return 0;
+        }
+        return std / mean;
+      });
+
+      const sma5 = computeSMA(closes, 5);
+      const ema10 = computeEMA(closes, 10);
+      const rsi14 = computeRSI(closes, 14);
+
+      const ema12 = computeEMA(closes, 12);
+      const ema26 = computeEMA(closes, 26);
+      const macd = ema12.map((value, index) => value - ema26[index]);
+      const macdSignal = computeEMA(macd, 9);
+
+      this.featureCube[symbol].CloseToOpen = closeToOpen;
       this.featureCube[symbol].Return = returns;
+      this.featureCube[symbol].LogReturn = logReturns;
       this.featureCube[symbol].Momentum3 = momentum3;
+      this.featureCube[symbol].Momentum7 = momentum7;
       this.featureCube[symbol].Volatility5 = volatility5;
+      this.featureCube[symbol].Volatility10 = volatility10;
+      this.featureCube[symbol].SMA5 = sma5;
+      this.featureCube[symbol].EMA10 = ema10;
+      this.featureCube[symbol].RSI14 = rsi14;
+      this.featureCube[symbol].MACD = macd.map((value) => (Number.isFinite(value) ? value : 0));
+      this.featureCube[symbol].MACDSignal = macdSignal.map((value) => (Number.isFinite(value) ? value : 0));
     });
 
     this.normalisedCube = {};
@@ -266,10 +442,18 @@ export class DataLoader {
       this.normalisedCube[symbol] = {
         Open: minMaxScale(this.featureCube[symbol].Open.slice()),
         Close: minMaxScale(this.featureCube[symbol].Close.slice()),
-        Return: standardScale(this.featureCube[symbol].Return.slice()),
-        Momentum3: standardScale(this.featureCube[symbol].Momentum3.slice()),
-        Volatility5: standardScale(this.featureCube[symbol].Volatility5.slice()),
       };
+
+      FEATURE_KEYS.forEach((key) => {
+        if (key === 'Open' || key === 'Close') {
+          return;
+        }
+        const raw = this.featureCube[symbol][key];
+        if (!Array.isArray(raw)) {
+          return;
+        }
+        this.normalisedCube[symbol][key] = standardScale(raw.slice());
+      });
     });
   }
 
